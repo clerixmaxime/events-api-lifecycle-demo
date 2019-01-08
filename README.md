@@ -178,7 +178,7 @@ Login on AWX as admin, go to the *Projects* section and add a new project with f
 * Description: `Enable continuous deployment of an API to 3scale AMP`
 * Organization: `default`
 * SCM Type: `Git`
-* SCM URL: `https://github.com/clerixmaxime/threescale-cicd-awx`
+* SCM URL: `https://github.com/nmasse-itix/threescale-cicd-awx`
 * SCM Branch/Tag/Commit: `master`
 
 You can also tick `Update Revision on Launch` and setup a cache timeout.
