@@ -1,18 +1,18 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 labels:
-  template: rhte-api-pipeline
+  template: events-api-pipeline
 metadata:
   annotations:
-    description: RHTE Deployment Pipeline
-  name: rhte-api-pipeline
+    description: EVENTS Deployment Pipeline
+  name: events-api-pipeline
 objects:
 - apiVersion: v1
   kind: BuildConfig
   metadata:
     labels:
-      name: rhte-pipeline
-    name: rhte-pipeline
+      name: events-pipeline
+    name: events-pipeline
   spec:
     output: null
     postCommit: null
