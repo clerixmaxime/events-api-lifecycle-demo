@@ -30,32 +30,32 @@ Fork this repository using your GitHub account or on any other GIT provider (Git
 ### 2/ Create the OpenShift projects
 
 ```sh
-oc new-project rhte-build --display-name="RHTE API (BUILD)"
-oc new-project rhte-test --display-name="RHTE API (TEST)"
-oc new-project rhte-prod --display-name="RHTE API (PROD)"
+oc new-project events-build --display-name="EVENTS API (BUILD)"
+oc new-project events-test --display-name="EVENTS API (TEST)"
+oc new-project events-prod --display-name="EVENTS API (PROD)"
 oc new-project ansible --display-name="Ansible Tower"
 ```
 
 ### 3/ Deploy Microcks in the BUILD environment
 
 ```sh
-oc create -f https://raw.githubusercontent.com/microcks/microcks/master/install/openshift/openshift-persistent-full-template.yml -n rhte-build
+oc create -f https://raw.githubusercontent.com/microcks/microcks/master/install/openshift/openshift-persistent-full-template.yml -n events-build
 ```
 
 The command below should be run by a cluster administrator because it requires to create an OAuthClient in OpenShift. In the command below, replace the variables by your values:
 
-- `<project>` : name of project where setup is done. Here `rhte-build`.
+- `<project>` : name of project where setup is done. Here `events-build`.
 - `<master_url>` : the HTTPS URL of OpenShift master
 - `<app_host_url>` : the Host for Routes, ex `192.168.99.100.nip.io` when using CDK or Minishift.
 
 ```sh
-oc new-app -n rhte-build --template=microcks-persistent --param=APP_ROUTE_HOSTNAME=microcks-<project>.<app_host_url> --param=KEYCLOAK_ROUTE_HOSTNAME=keycloak-<project>.<app_host_url> --param=OPENSHIFT_MASTER=<master_url> --param=OPENSHIFT_OAUTH_CLIENT_NAME=<project>-client
+oc new-app -n events-build --template=microcks-persistent --param=APP_ROUTE_HOSTNAME=microcks-<project>.<app_host_url> --param=KEYCLOAK_ROUTE_HOSTNAME=keycloak-<project>.<app_host_url> --param=OPENSHIFT_MASTER=<master_url> --param=OPENSHIFT_OAUTH_CLIENT_NAME=<project>-client
 ```
 
 Create a Jenkins Master image containing Microcks plugin.
 
 ```sh
-oc process -f https://raw.githubusercontent.com/microcks/microcks-jenkins-plugin/master/openshift-jenkins-master-bc.yml | oc create -f - -n rhte-build
+oc process -f https://raw.githubusercontent.com/microcks/microcks-jenkins-plugin/master/openshift-jenkins-master-bc.yml | oc create -f - -n events-build
 ```
 
 Wait for build to finish.
@@ -63,50 +63,50 @@ Wait for build to finish.
 ### 4/ Deploy Jenkins in the BUILD environment
 
 ```sh
-oc new-app -n rhte-build --name=jenkins  --template=jenkins-persistent --param=NAMESPACE=rhte-build --param=JENKINS_IMAGE_STREAM_TAG=microcks-jenkins-master:latest -p MEMORY_LIMIT=2Gi
-oc env -n rhte-build dc/jenkins JENKINS_OPTS=--sessionTimeout=86400
+oc new-app -n events-build --name=jenkins  --template=jenkins-persistent --param=NAMESPACE=events-build --param=JENKINS_IMAGE_STREAM_TAG=microcks-jenkins-master:latest -p MEMORY_LIMIT=2Gi
+oc env -n events-build dc/jenkins JENKINS_OPTS=--sessionTimeout=86400
 ```
 
 ### 5/ Give Jenkins the right to manage the TEST and PROD environments
 
 ```sh
-oc adm policy add-role-to-user admin system:serviceaccount:rhte-build:jenkins -n rhte-test
-oc adm policy add-role-to-user admin system:serviceaccount:rhte-build:jenkins -n rhte-prod
+oc adm policy add-role-to-user admin system:serviceaccount:events-build:jenkins -n events-test
+oc adm policy add-role-to-user admin system:serviceaccount:events-build:jenkins -n events-prod
 ```
 
 ### 6/ Build the API Backend
 
 Create a new BuildConfig to build the API Backend using your forked repository.
-Do not forget to replace `https://github.com/nmasse-itix/rhte-api.git` by your
+Do not forget to replace `https://github.com/clerixmaxime/events-api.git` by your
 repository URL.
 
 ```sh
-oc new-build -n rhte-build nodejs:8~https://github.com/nmasse-itix/rhte-api.git --strategy=source --name=rhte-api
-oc start-build -n rhte-build rhte-api
+oc new-build -n events-build nodejs:8~https://github.com/clerixmaxime/events-api.git --strategy=source --name=events-api
+oc start-build -n events-build events-api
 ```
 
 Wait for the build to finish:
 
 ```sh
-oc logs -f bc/rhte-api -n rhte-build
+oc logs -f bc/events-api -n events-build
 ```
 
 ### 7/ Deploy the API Backend to the TEST and PROD environments
 
 ```sh
-oc tag rhte-build/rhte-api:latest rhte-api:ready-for-test -n rhte-test
-oc new-app rhte-api:ready-for-test --name rhte-api -n rhte-test
-oc expose svc/rhte-api -n rhte-test
-oc tag rhte-build/rhte-api:latest rhte-api:ready-for-prod -n rhte-prod
-oc new-app rhte-api:ready-for-prod --name rhte-api -n rhte-prod
-oc expose svc/rhte-api -n rhte-prod
+oc tag events-build/events-api:latest events-api:ready-for-test -n events-test
+oc new-app events-api:ready-for-test --name events-api -n events-test
+oc expose svc/events-api -n events-test
+oc tag events-build/events-api:latest events-api:ready-for-prod -n events-prod
+oc new-app events-api:ready-for-prod --name events-api -n events-prod
+oc expose svc/events-api -n events-prod
 ```
 
 ### 8/ Remove the trigger on the TEST and PROD environments
 
 ```sh
-oc set triggers dc/rhte-api --from-image=rhte-api:ready-for-test --manual=true -c rhte-api -n rhte-test
-oc set triggers dc/rhte-api --from-image=rhte-api:ready-for-prod --manual=true -c rhte-api -n rhte-prod
+oc set triggers dc/events-api --from-image=events-api:ready-for-test --manual=true -c events-api -n events-test
+oc set triggers dc/events-api --from-image=events-api:ready-for-prod --manual=true -c events-api -n events-prod
 ```
 
 ### 9/ Prepare your 3scale SaaS Tenant
@@ -122,17 +122,17 @@ On your 3scale Admin Portal, go the `Developer Portal` section and replace your 
 ### 10/ Deploy the 3scale APIcast instances in TEST and PROD
 
 ```sh
-oc process -f apicast-template.yaml -p ACCESS_TOKEN=<YOUR_3SCALE_ACCESS_TOKEN> -p TENANT=<YOUR_3SCALE_TENANT> |oc create -f - -n rhte-test
-oc process -f apicast-template.yaml -p ACCESS_TOKEN=<YOUR_3SCALE_ACCESS_TOKEN> -p TENANT=<YOUR_3SCALE_TENANT> |oc create -f - -n rhte-prod
+oc process -f apicast-template.yaml -p ACCESS_TOKEN=<YOUR_3SCALE_ACCESS_TOKEN> -p TENANT=<YOUR_3SCALE_TENANT> |oc create -f - -n events-test
+oc process -f apicast-template.yaml -p ACCESS_TOKEN=<YOUR_3SCALE_ACCESS_TOKEN> -p TENANT=<YOUR_3SCALE_TENANT> |oc create -f - -n events-prod
 ```
 
 ### 11/ Create the OpenShift routes for your APIcast gateways
 
 ```sh
-oc process -f apicast-routes-template.yaml -p MAJOR_VERSION=1 -p WILDCARD_DOMAIN=test.app.itix.fr | oc create -f - -n rhte-test
-oc process -f apicast-routes-template.yaml -p MAJOR_VERSION=2 -p WILDCARD_DOMAIN=test.app.itix.fr | oc create -f - -n rhte-test
-oc process -f apicast-routes-template.yaml -p MAJOR_VERSION=1 -p WILDCARD_DOMAIN=prod.app.itix.fr | oc create -f - -n rhte-prod
-oc process -f apicast-routes-template.yaml -p MAJOR_VERSION=2 -p WILDCARD_DOMAIN=prod.app.itix.fr | oc create -f - -n rhte-prod
+oc process -f apicast-routes-template.yaml -p MAJOR_VERSION=1 -p WILDCARD_DOMAIN=test.mc-apps.openhybridcloud.io | oc create -f - -n events-test
+oc process -f apicast-routes-template.yaml -p MAJOR_VERSION=2 -p WILDCARD_DOMAIN=test.mc-apps.openhybridcloud.io | oc create -f - -n events-test
+oc process -f apicast-routes-template.yaml -p MAJOR_VERSION=1 -p WILDCARD_DOMAIN=prod.mc-apps.openhybridcloud.io | oc create -f - -n events-prod
+oc process -f apicast-routes-template.yaml -p MAJOR_VERSION=2 -p WILDCARD_DOMAIN=prod.mc-apps.openhybridcloud.io | oc create -f - -n events-prod
 ```
 
 ### 12/ Deploy Ansible Tower
@@ -178,7 +178,7 @@ Login on AWX as admin, go to the *Projects* section and add a new project with f
 * Description: `Enable continuous deployment of an API to 3scale AMP`
 * Organization: `default`
 * SCM Type: `Git`
-* SCM URL: `https://github.com/nmasse-itix/threescale-cicd-awx`
+* SCM URL: `https://github.com/clerixmaxime/threescale-cicd-awx`
 * SCM Branch/Tag/Commit: `master`
 
 You can also tick `Update Revision on Launch` and setup a cache timeout.
@@ -208,7 +208,7 @@ ansible_connection: local
 ---
 threescale_cicd_access_token: <3scale_access_token>
 threescale_cicd_api_environment_name: test
-threescale_cicd_wildcard_domain: test.app.itix.fr
+threescale_cicd_wildcard_domain: test.mc-apps.openhybridcloud.io
 ```
 
 * Do not forget to replace the `threescale_cicd_access_token`, `threescale_cicd_api_environment_name` and `threescale_cicd_wildcard_domain` variables with respectively your access token to 3scale API Management backend, the name of environment as well as the wildcard that will be used to serve Gateway through Route.
@@ -222,7 +222,7 @@ threescale_cicd_wildcard_domain: test.app.itix.fr
 ---
 threescale_cicd_access_token: <3scale_access_token>
 threescale_cicd_api_environment_name: prod
-threescale_cicd_wildcard_domain: prod.app.itix.fr
+threescale_cicd_wildcard_domain: prod.mc-apps.openhybridcloud.io
 ```
 
 * Change the name of the new inventory to `3scale-prod` and save
@@ -232,7 +232,7 @@ threescale_cicd_wildcard_domain: prod.app.itix.fr
 Create the Jenkins pipeline from your forked repository:
 
 ```sh
-oc process -f pipeline-template.yaml -p GIT_REPO=https://github.com/nmasse-itix/rhte-api.git -p MICROCKS_TEST_ENDPOINT=http://$(oc get route rhte-api -n rhte-test -o jsonpath={.spec.host}) |oc create -f - -n rhte-build
+oc process -f pipeline-template.yaml -p GIT_REPO=https://github.com/clerixmaxime/events-api.git -p MICROCKS_TEST_ENDPOINT=http://$(oc get route events-api -n events-test -o jsonpath={.spec.host}) |oc create -f - -n events-build
 ```
 
 ## 15/ Jenkins setup for Ansible Tower
@@ -249,7 +249,7 @@ Go to [studio.apicur.io](https://studio.apicur.io/), login and import the three 
 
 * Go to [https://studio.apicur.io/apis/import](https://studio.apicur.io/apis/import)
 * Choose `Import from URL`
-* Fill-in the URL field with the raw url of the first API Contract (https://raw.githubusercontent.com/nmasse-itix/rhte-api/master/api-contracts/openapi-spec-v1.0.yaml)
+* Fill-in the URL field with the raw url of the first API Contract (https://raw.githubusercontent.com/clerixmaxime/events-api/master/api-contracts/openapi-spec-v1.0.yaml)
 * Repeat the process with the two remaining API contracts
 
 ## Running the Demo
@@ -293,7 +293,7 @@ _Let’s start our duty with Apicurio. In Apicurio we will create the GetPartici
 - Add a `200` response code with a description ("OK")
 - Go back to the `Red Hat Event API` summary and click the three dots
 - Click `Publish`, choose `GitHub`
-- Select your organisation, find your forked repository named `rhte-api`, select the branch `master`
+- Select your organisation, find your forked repository named `events-api`, select the branch `master`
 - In the resource field, put `openapi-spec.yaml`
 - Give a commit message and click `Publish API`
 
@@ -311,7 +311,7 @@ _The GetParticipants method needs to return a list of participants._
 - Call it from a curl command:
 
 ```sh
-curl -D - http://microcks-rhte.app.itix.fr/rest/RedHat-Event-API/1.1/participants
+curl -D - http://microcks-events.mc-apps.openhybridcloud.io/rest/RedHat-Event-API/1.1/participants
 ```
 
 _In the meantime, we can start our implementation. Let’s develop some code for our new API Method._
@@ -329,7 +329,7 @@ _We will use Jenkins that will do the Continuous Integration and Ansible for the
 
 - Go to your OpenShift build project
 - Go to `Build` > `Pipelines`
-- Click on the `rhte-pipeline`
+- Click on the `events-pipeline`
 - Click `Start Pipeline`
 
 _Let’s trigger a new deployment !_
@@ -377,9 +377,9 @@ _In the OpenID Specification, this part states that we require an API Key to use
 _Since it is a breaking change of the API Contract, do not forget to change the API Version to 2.0._
 
 - Show the version number
-- Go back to the `RHTE API` summary and click the three dots
+- Go back to the `events API` summary and click the three dots
 - Click `Publish`, choose `GitHub`
-- Select your organisation, find your forked repository named `rhte-api`, select the branch `master`
+- Select your organisation, find your forked repository named `events-api`, select the branch `master`
 - In the resource field, put `openapi-spec.yaml`
 - Give a commit message and click `Publish API`
 
