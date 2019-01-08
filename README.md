@@ -64,7 +64,7 @@ Wait for build to finish.
 
 ```sh
 oc new-app -n events-build --name=jenkins  --template=jenkins-persistent --param=NAMESPACE=events-build --param=JENKINS_IMAGE_STREAM_TAG=microcks-jenkins-master:latest -p MEMORY_LIMIT=2Gi
-oc env -n events-build dc/jenkins JENKINS_OPTS=--sessionTimeout=86400
+oc set env -n events-build dc/jenkins JENKINS_OPTS=--sessionTimeout=86400
 ```
 
 ### 5/ Give Jenkins the right to manage the TEST and PROD environments
