@@ -4,8 +4,8 @@ labels:
   template: apicast
 metadata:
   annotations:
-    description: RHTE APIcast Routes
-  name: rhte-apicast-routes
+    description: EVENTS APIcast Routes
+  name: events-apicast-routes
 objects:
 - apiVersion: route.openshift.io/v1
   kind: Route
@@ -47,7 +47,7 @@ parameters:
 - description: 'The system_name of the API, converted to DNS ("_" -> "-")'
   displayName: 3scale API Base Name
   name: BASE_NAME
-  value: rhte-api
+  value: events-api
   required: true
 - description: The API major version (1, 2, etc.)
   displayName: 3scale API major version
