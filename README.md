@@ -77,11 +77,11 @@ oc adm policy add-role-to-user admin system:serviceaccount:events-build:jenkins 
 ### 6/ Build the API Backend
 
 Create a new BuildConfig to build the API Backend using your forked repository.
-Do not forget to replace `https://github.com/clerixmaxime/events-api.git` by your
+Do not forget to replace `https://github.com/clerixmaxime/events-api-lifecycle-demo.git` by your
 repository URL.
 
 ```sh
-oc new-build -n events-build nodejs:8~https://github.com/clerixmaxime/events-api.git --strategy=source --name=events-api
+oc new-build -n events-build nodejs:8~https://github.com/clerixmaxime/events-api-lifecycle-demo.git --strategy=source --name=events-api
 oc start-build -n events-build events-api
 ```
 
@@ -232,7 +232,7 @@ threescale_cicd_wildcard_domain: prod.mc-apps.openhybridcloud.io
 Create the Jenkins pipeline from your forked repository:
 
 ```sh
-oc process -f pipeline-template.yaml -p GIT_REPO=https://github.com/clerixmaxime/events-api.git -p MICROCKS_TEST_ENDPOINT=http://$(oc get route events-api -n events-test -o jsonpath={.spec.host}) |oc create -f - -n events-build
+oc process -f pipeline-template.yaml -p GIT_REPO=https://github.com/clerixmaxime/events-api-lifecycle-demo.git -p MICROCKS_TEST_ENDPOINT=http://$(oc get route events-api -n events-test -o jsonpath={.spec.host}) |oc create -f - -n events-build
 ```
 
 ## 15/ Jenkins setup for Ansible Tower
