@@ -19,7 +19,7 @@ node('nodejs') {
       threescale_cicd_api_backend_hostname: params.OPENSHIFT_SERVICE_NAME + ":8080",
       threescale_cicd_openapi_smoketest_operation: "GetLocation",
       threescale_cicd_api_backend_scheme: "http",
-      threescale_cicd_api_base_system_name: "rhte_api",
+      threescale_cicd_api_base_system_name: "events_api",
       threescale_cicd_validate_openapi: false,
       openapi_file: "openapi-spec.yaml"
   ]
