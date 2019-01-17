@@ -33,7 +33,7 @@ Fork this repository using your GitHub account or on any other GIT provider (Git
 oc new-project events-build --display-name="EVENTS API (BUILD)"
 oc new-project events-test --display-name="EVENTS API (TEST)"
 oc new-project events-prod --display-name="EVENTS API (PROD)"
-oc new-project ansible --display-name="Ansible Tower"
+oc new-project tower --display-name="Red Hat Ansible Tower"
 ```
 
 ### 3/ Deploy Microcks in the BUILD environment
@@ -60,21 +60,25 @@ oc process -f https://raw.githubusercontent.com/microcks/microcks-jenkins-plugin
 
 Wait for build to finish.
 
-### 4/ Deploy Jenkins in the BUILD environment
+### 4/ Configure Microcks 
+
+TODO
+
+### 5/ Deploy Jenkins in the BUILD environment
 
 ```sh
 oc new-app -n events-build --name=jenkins  --template=jenkins-persistent --param=NAMESPACE=events-build --param=JENKINS_IMAGE_STREAM_TAG=microcks-jenkins-master:latest -p MEMORY_LIMIT=2Gi
 oc set env -n events-build dc/jenkins JENKINS_OPTS=--sessionTimeout=86400
 ```
 
-### 5/ Give Jenkins the right to manage the TEST and PROD environments
+### 6/ Give Jenkins the right to manage the TEST and PROD environments
 
 ```sh
 oc adm policy add-role-to-user admin system:serviceaccount:events-build:jenkins -n events-test
 oc adm policy add-role-to-user admin system:serviceaccount:events-build:jenkins -n events-prod
 ```
 
-### 6/ Build the API Backend
+### 7/ Build the API Backend
 
 Create a new BuildConfig to build the API Backend using your forked repository.
 Do not forget to replace `https://github.com/clerixmaxime/events-api-lifecycle-demo.git` by your
@@ -91,7 +95,7 @@ Wait for the build to finish:
 oc logs -f bc/events-api -n events-build
 ```
 
-### 7/ Deploy the API Backend to the TEST and PROD environments
+### 8/ Deploy the API Backend to the TEST and PROD environments
 
 ```sh
 oc tag events-build/events-api:latest events-api:ready-for-test -n events-test
@@ -102,14 +106,14 @@ oc new-app events-api:ready-for-prod --name events-api -n events-prod
 oc expose svc/events-api -n events-prod
 ```
 
-### 8/ Remove the trigger on the TEST and PROD environments
+### 9/ Remove the trigger on the TEST and PROD environments
 
 ```sh
 oc set triggers dc/events-api --from-image=events-api:ready-for-test --manual=true -c events-api -n events-test
 oc set triggers dc/events-api --from-image=events-api:ready-for-prod --manual=true -c events-api -n events-prod
 ```
 
-### 9/ Prepare your 3scale SaaS Tenant
+### 10/ Prepare your 3scale SaaS Tenant
 
 Create an Access Token in your 3scale SaaS Tenant that has read-write access to the Account Management API. Please check [3scale documentation](https://access.redhat.com/documentation/en-us/red_hat_3scale/2-saas/html-single/accounts/index#access_tokens) on how to get an access token. Write down this value for later use.
 
@@ -119,14 +123,14 @@ On your 3scale Admin Portal, go the `Developer Portal` section and replace your 
 
 **Do not forget to hit `Save` and `Publish`.**
 
-### 10/ Deploy the 3scale APIcast instances in TEST and PROD
+### 11/ Deploy the 3scale APIcast instances in TEST and PROD
 
 ```sh
 oc process -f apicast-template.yaml -p ACCESS_TOKEN=<YOUR_3SCALE_ACCESS_TOKEN> -p TENANT=<YOUR_3SCALE_TENANT> |oc create -f - -n events-test
 oc process -f apicast-template.yaml -p ACCESS_TOKEN=<YOUR_3SCALE_ACCESS_TOKEN> -p TENANT=<YOUR_3SCALE_TENANT> |oc create -f - -n events-prod
 ```
 
-### 11/ Create the OpenShift routes for your APIcast gateways
+### 12/ Create the OpenShift routes for your APIcast gateways
 
 ```sh
 oc process -f apicast-routes-template.yaml -p MAJOR_VERSION=1 -p WILDCARD_DOMAIN=test.mc-apps.openhybridcloud.io | oc create -f - -n events-test
@@ -135,10 +139,13 @@ oc process -f apicast-routes-template.yaml -p MAJOR_VERSION=1 -p WILDCARD_DOMAIN
 oc process -f apicast-routes-template.yaml -p MAJOR_VERSION=2 -p WILDCARD_DOMAIN=prod.mc-apps.openhybridcloud.io | oc create -f - -n events-prod
 ```
 
-### 12/ Deploy Ansible Tower
+### 13/ Deploy Ansible Tower
+
+Documentation : https://docs.ansible.com/ansible-tower/latest/html/administration/openshift_configuration.html
+#### Create a PVC for PostgreSQL
 
 ```sh
-oc project ansible
+oc project tower
 oc apply -f - <<EOF
 apiVersion: "v1"
 kind: "PersistentVolumeClaim"
@@ -153,26 +160,68 @@ spec:
 EOF
 ```
 
-> Note: since AWX moves very fast, it is recommended to settle the version of all components.
+#### Create a virtual Env
+This demonstration requires at least Jinja 2.8 to be run (Currently Ansible Tower 3.4 uses Jinja 2.7.2). Before deploying Ansible Tower, we have to create a virtual env in order to run our playbooks.
 
-```sh
-git clone https://github.com/ansible/awx.git
-git clone https://github.com/ansible/awx-logos.git
-cd awx
-git checkout 2b9954c .
-cd installer
-ansible-playbook -i inventory install.yml -e kubernetes_web_version=1.0.7.2 -e kubernetes_web_version=1.0.7.2 -e kubernetes_memcached_image=1.5.10 -e openshift_host="$(oc whoami --show-server)" -e openshift_skip_tls_verify=true -e openshift_project="$(oc project -q)" -e openshift_user="$(oc whoami)" -e openshift_token="$(oc whoami -t)" -e admin_user=admin -e admin_password=redhat123 -e awx_official=true
+Create a Dockerfile with the following content :
+```Dockerfile
+FROM registry.access.redhat.com/ansible-tower-34/ansible-tower:latest
+USER root
+RUN yum install -y gcc
+RUN mkdir -p /var/lib/awx/venv/jinja2.8
+RUN virtualenv --system-site-packages /var/lib/awx/venv/jinja2.8
+RUN sh -c ". /var/lib/awx/venv/jinja2.8/bin/activate ; /var/lib/awx/venv/jinja2.8/bin/pip install python-memcached psutil ; pip install --upgrade jinja2;"
 ```
 
-The default installation of AWX uses a combination of `latest` tags and an `imagePullPolicy` set to `always`, which is a recipe for disaster. All tags have been set explicitely on the command line earlier, now you can set the `imagePullPolicy` to `IfNotPresent`.
-
-```sh
-oc patch dc/awx --type=json -p '[ { "op": "replace", "path": "/spec/template/spec/containers/0/imagePullPolicy", "value": "IfNotPresent" }, { "op": "replace", "path": "/spec/template/spec/containers/1/imagePullPolicy", "value": "IfNotPresent" }, { "op": "replace", "path": "/spec/template/spec/containers/2/imagePullPolicy", "value": "IfNotPresent" }, { "op": "replace", "path": "/spec/template/spec/containers/3/imagePullPolicy", "value": "IfNotPresent" } ]'
+Build and push the Docker image. Make sure you replace the name of the docker image with your own one. https://quay.io is a great public registry to host your custom Ansible images.
+```
+docker build -t quay.io/mclerix/ansible-tower-venv-jinja28:jinja2.10 .
+docker push quay.io/mclerix/ansible-tower-venv-jinja28:jinja2.10
 ```
 
-### 13/ Configure project and job in AWX
+Now that your Ansible Virtual Env is ready, we will deploy Ansible Tower based on this one.
 
-Login on AWX as admin, go to the *Projects* section and add a new project with following properties :
+#### Deploy Ansible Tower
+Get Ansible Tower assets here as tar.gz : https://releases.ansible.com/ansible-tower/setup_openshift/?extIdCarryOver=true&sc_cid=701f2000001OH7YAAW
+
+Download and extract the release that you want to deploy.
+
+Modify the provided inventory file to match with your environment. You can change tower default credentials, postgreSQL and RabbitMQ configuration. The important section is Deploy into OpenShift. Replace the following value:
+
+```yaml
+openshift_host=https://<your_hostname>:8443
+openshift_skip_tls_verify=true
+openshift_project=tower
+openshift_user=<your_username>
+openshift_password=<your_password>
+```
+
+Then modify your inventory file in order to use the image that you build with a venv. Edit the file group_vars/all with the following value:
+```yaml
+[...]
+
+kubernetes_web_image: quay.io/mclerix/ansible-tower-venv-jinja28
+kubernetes_task_image: quay.io/mclerix/ansible-tower-venv-jinja28
+
+[...]
+
+kubernetes_task_version: 'jinja2.10'
+kubernetes_web_version: 'jinja2.10'
+```
+
+Deploy into OpenShift : 
+```sh
+./setup_openshift.sh -- -v
+```
+
+If you don't want to store your OpenShift password in the inventory file, you can add it at launch with the following command:
+```sh
+./setup_openshift.sh -e openshift_password=<your_password> -- -v
+```
+
+### 14/ Configure project and job in Ansible Tower
+
+Login on Ansible Tower as admin, go to the *Projects* section and add a new project with following properties :
 
 * Name: `Deploy API to 3scale`
 * Description: `Enable continuous deployment of an API to 3scale AMP`
@@ -190,6 +239,7 @@ Then you have to add a new *Job Template* with following properties :
 * Playbook: `deploy-api.yml`
 * Inventory: `Prompt on Launch`
 * Extra-variables: `Prompt on Launch`
+* Ansible-Environment (allows to use the venv created before) : `/var/lib/awx/venv/jinja2.8`
 
 For both the TEST and PROD environments, you will have to declare an inventory into AWX.
 
@@ -227,7 +277,7 @@ threescale_cicd_wildcard_domain: prod.mc-apps.openhybridcloud.io
 
 * Change the name of the new inventory to `3scale-prod` and save
 
-### 14/ Create the Jenkins Pipeline
+### 15/ Create the Jenkins Pipeline
 
 Create the Jenkins pipeline from your forked repository:
 
@@ -235,7 +285,7 @@ Create the Jenkins pipeline from your forked repository:
 oc process -f pipeline-template.yaml -p GIT_REPO=https://github.com/clerixmaxime/events-api-lifecycle-demo.git -p MICROCKS_TEST_ENDPOINT=http://$(oc get route events-api -n events-test -o jsonpath={.spec.host}) |oc create -f - -n events-build
 ```
 
-## 15/ Jenkins setup for Ansible Tower
+## 16/ Jenkins setup for Ansible Tower
 
 You finally need to configure the connection between Jenkins and AWX/Ansible Tower. To do this, go to Jenkins, click on *Manage Jenkins* > *Manage Plugins* and install the `Ansible Tower` plugin. You do not need to restart Jenkins.
 
@@ -243,7 +293,7 @@ Then click on *Credentials* > *System*, click on *Global credentials (unrestrict
 
 Finally, you also have to configure an alias to your AWX Server into Jenkins. This will allow our Jenkins pipelines to access the AWX server easily without knowing the complete server name or address. Click on *Configure System* in the management section and then go to the *Ansible Tower* section and add a new Tower Installation. Give it a name (we've simply used `tower` in our scripts), fill the URL and specify that it should be accessed using the user and credentials we have just created before.
 
-## 16/ Load the OpenAPI Specifications to Apicurio
+## 17/ Load the OpenAPI Specifications to Apicurio
 
 Go to [studio.apicur.io](https://studio.apicur.io/), login and import the three API contracts in the [api-contract](api-contract) folder.
 
