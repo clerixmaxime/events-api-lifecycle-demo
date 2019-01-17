@@ -55,14 +55,20 @@ oc new-app -n events-build --template=microcks-persistent --param=APP_ROUTE_HOST
 Create a Jenkins Master image containing Microcks plugin.
 
 ```sh
-oc process -f https://raw.githubusercontent.com/microcks/microcks-jenkins-plugin/master/openshift-jenkins-master-bc.yml | oc create -f - -n events-build
+oc process -f https://raw.githubusercontent.com/microcks/microcks-jenkins-plugin/master/openshift-jenkins-master-bc.yml -p MICROCKS_JENKINS_PLUGIN_VERSION=0.2.0 | oc create -f - -n events-build
 ```
 
 Wait for build to finish.
 
 ### 4/ Configure Microcks 
 
-TODO
+We will import our Postman colletion within microcks in order to create mocks and test our API implementation
+- Go to `http://microcks-events-build.<your_subdomain>`
+- Click on OpenShift v3 button to login with your OpenShift credentials
+- Go to Importers tab on the left
+- Click on the `upload` button on the left right
+- Upload the file that you can find at the following URL : https://raw.githubusercontent.com/clerixmaxime/events-api-lifecycle-demo/master/postman_collection.json
+- Once done, you can go to the APIs | Services tab and you will the RedHat-Event-API
 
 ### 5/ Deploy Jenkins in the BUILD environment
 
